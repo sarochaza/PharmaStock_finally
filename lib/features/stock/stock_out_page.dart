@@ -642,7 +642,7 @@ class _StockOutPageState extends State<StockOutPage> {
       appBar: AppBar(
         title: const Text('จ่ายยาออก'),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0EA37A),
+        backgroundColor: const Color(0xFF1976D2),
         foregroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,

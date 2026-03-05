@@ -1,8 +1,8 @@
-// lib/pages/home/home_page.dart
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:phamory/core/theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase_guard.dart';
@@ -13,6 +13,12 @@ import 'profile_page.dart';
 import 'security_page.dart';
 import 'partners/manufacturers_page.dart';
 import 'partners/suppliers_page.dart';
+
+// ✅ เพิ่ม: หน้าดูรายการยาทั้งหมด (active + inactive)
+import 'all_drugs_page.dart';
+
+// ✅ เพิ่ม: หน้า "ผู้ป่วย" (ตามโครงสร้างไฟล์ของคุณ)
+import '../../core/patients/patient_home_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -43,14 +49,11 @@ class _HomePageState extends State<HomePage> {
 
   int _expiredCount = 0;
   int _nearExpireCount = 0;
-
-  // ✅ แยกยาสต็อกต่ำ vs ยาไม่มีสต็อก
   int _lowStockCount = 0;
   int _outStockCount = 0;
 
   num _onHandBaseTotal = 0;
 
-  // ✅ แยกคงเหลือตามหน่วยฐาน
   Map<String, num> _onHandByBaseUnit = {};
 
   // ===== Financial =====
@@ -63,7 +66,6 @@ class _HomePageState extends State<HomePage> {
   List<_ChartPoint> _salesSeries = [];
   List<_TopDrug> _top5 = [];
 
-  // ✅ Top 10 ขายดี: รายวัน / รายเดือน
   int _topMode = 0; // 0=daily, 1=monthly
   List<_TopDrug> _top10Daily = [];
   List<_TopDrug> _top10Monthly = [];
@@ -229,7 +231,6 @@ class _HomePageState extends State<HomePage> {
     _nearExpireCount = nearExpire;
     _onHandBaseTotal = onHandTotal;
 
-    // ✅ แยก low/out + รวมคงเหลือแยกหน่วยฐาน จาก v_drug_stock_summary + drugs.base_unit
     try {
       final sumRows = await sb
           .from('v_drug_stock_summary')
@@ -452,7 +453,6 @@ class _HomePageState extends State<HomePage> {
     _top10Daily = await _loadTopRange(fromIso: startIso, label: 'daily', limit: 10);
   }
 
-  // ✅ Top 10 รายเดือน (ตั้งแต่วันแรกของเดือน)
   Future<void> _loadTop10Monthly() async {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, 1);
@@ -613,7 +613,7 @@ class _HomePageState extends State<HomePage> {
         if (info == null) continue;
 
         final rp = info.reorderPoint;
-        // ✅ low เฉพาะตัวที่ยังมีสต็อก (>0) และ <= reorder_point
+
         if (rp > 0 && total > 0 && total <= rp) {
           final drugLots = lots.where((x) => x.drugId == drugId).toList()
             ..sort((a, b) => a.expDate.compareTo(b.expDate));
@@ -635,7 +635,8 @@ class _HomePageState extends State<HomePage> {
       try {
         final sum = await sb
             .from('v_drug_stock_summary')
-            .select('drug_id, on_hand_base, stock_status, drugs(code, generic_name, brand_name, base_unit, reorder_point, expiry_alert_days)')
+            .select(
+                'drug_id, on_hand_base, stock_status, drugs(code, generic_name, brand_name, base_unit, reorder_point, expiry_alert_days)')
             .eq('owner_id', ownerId);
 
         final outGroups = <_DrugAlertGroup>[];
@@ -851,14 +852,14 @@ class _HomePageState extends State<HomePage> {
                             final rp = g.info.reorderPoint;
                             final total = g.totalBase;
 
-                            final lots = [...g.lots]..sort((a, b) => a.expDate.compareTo(b.expDate));
+                            final lots = [...g.lots]
+                              ..sort((a, b) => a.expDate.compareTo(b.expDate));
 
                             return Container(
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(color: Colors.black.withOpacity(0.06)),
-                                // ✅ เงาแบบคม (ไม่ฟุ้ง)
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.03),
@@ -921,8 +922,8 @@ class _HomePageState extends State<HomePage> {
                                           ),
                                       ],
                                     ),
-
-                                    if ((type == _AlertType.lowStock || type == _AlertType.outStock) && rp > 0) ...[
+                                    if ((type == _AlertType.lowStock || type == _AlertType.outStock) &&
+                                        rp > 0) ...[
                                       const SizedBox(height: 8),
                                       Text(
                                         'จุดสั่งซื้อ (reorder_point): ${qty(rp)} ${g.info.baseUnit}',
@@ -931,7 +932,6 @@ class _HomePageState extends State<HomePage> {
                                             fontWeight: FontWeight.w700),
                                       ),
                                     ],
-
                                     if (type == _AlertType.outStock) ...[
                                       const SizedBox(height: 10),
                                       Container(
@@ -959,7 +959,6 @@ class _HomePageState extends State<HomePage> {
                                         ),
                                       ),
                                     ],
-
                                     if (type != _AlertType.outStock) ...[
                                       const SizedBox(height: 10),
                                       Container(
@@ -1161,9 +1160,6 @@ class _HomePageState extends State<HomePage> {
     return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }
 
-  // =========================
-  // ✅ Drawer (Hamburger) — เหลือแค่โปรไฟล์ & ระบบ + ออกจากระบบล่างสุด (มี confirm)
-  // =========================
   Widget _drawerSectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
@@ -1355,143 +1351,262 @@ class _HomePageState extends State<HomePage> {
             .clamp(1, 1 << 30);
     final okLots = (_lotCount - _expiredCount - _nearExpireCount).clamp(0, 1 << 30);
 
-    final user = _sb!.auth.currentUser;
+    final heroTitle = (_shopName?.trim().isNotEmpty == true) ? _shopName!.trim() : 'PharmaStock';
+    final heroSubtitle =
+        (_displayName?.trim().isNotEmpty == true) ? _displayName!.trim() : 'Dashboard';
+
+    Widget actionPill({
+      required IconData icon,
+      required String label,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.16),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.white.withOpacity(0.18)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.white.withOpacity(0.95), size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.95),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       drawer: _buildDrawer(context),
-
-      // ✅ พื้นหลังฟุ้งสวย (คงไว้)
       backgroundColor: const Color(0xFFF4F7FB),
-
       body: RefreshIndicator(
         onRefresh: _bootstrap,
         child: ListView(
           controller: _scrollCtl,
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
-            // ================= HERO (ยังสวยได้) =================
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                gradient: LinearGradient(
-                  colors: [cs.primary, cs.primary.withOpacity(0.78)],
-                ),
-                // ✅ เงาของ HERO ได้ (ไม่ใช่ฟุ้งที่ panel)
-                boxShadow: [
-                  BoxShadow(
-                    color: cs.primary.withOpacity(0.20),
-                    blurRadius: 18,
-                    offset: const Offset(0, 10),
+            // ================= HERO (soft + glass) =================
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.lerp(cs.primary, Colors.white, 0.10)!,
+                      Color.lerp(cs.primary, Colors.black, 0.06)!.withOpacity(0.92),
+                      Color.lerp(cs.primary, Colors.white, 0.22)!.withOpacity(0.85),
+                    ],
                   ),
-                ],
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(
+                ),
+                child: Stack(
                   children: [
-                    Builder(
-                      builder: (ctx) => IconButton(
-                        tooltip: 'เมนู',
-                        onPressed: () => Scaffold.of(ctx).openDrawer(),
-                        icon: const Icon(Icons.menu_rounded, color: Colors.white),
+                    Positioned(
+                      right: -60,
+                      top: -50,
+                      child: Container(
+                        width: 180,
+                        height: 180,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.10),
+                        ),
                       ),
                     ),
-
-                    // logo
-                    Builder(builder: (_) {
-                      final heroLogo = _homeLogoProvider();
-                      return Container(
-                        width: 46,
-                        height: 46,
+                    Positioned(
+                      left: -70,
+                      bottom: -80,
+                      child: Container(
+                        width: 220,
+                        height: 220,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.20)),
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.08),
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: heroLogo == null
-                            ? const Icon(Icons.medication_rounded, color: Colors.white)
-                            : Image(
-                                image: heroLogo,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.medication_rounded, color: Colors.white),
+                      ),
+                    ),
+                    Positioned(
+                      left: 40,
+                      top: 30,
+                      child: Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withOpacity(0.05),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white.withOpacity(0.16)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cs.primary.withOpacity(0.16),
+                            blurRadius: 18,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Builder(
+                                builder: (ctx) => IconButton(
+                                  tooltip: 'เมนู',
+                                  onPressed: () => Scaffold.of(ctx).openDrawer(),
+                                  icon: Icon(Icons.menu_rounded, color: Colors.white.withOpacity(0.95)),
+                                ),
                               ),
-                      );
-                    }),
-
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text(
-                          'Dashboard',
-                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
-                        ),
-                        Text(
-                          user?.email ?? '',
-                          style: TextStyle(color: Colors.white.withOpacity(0.85)),
-                        ),
-                        if ((_displayName ?? '').trim().isNotEmpty || (_shopName ?? '').trim().isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                              const Spacer(),
+                              IconButton(
+                                tooltip: 'รีเฟรช',
+                                onPressed: _bootstrap,
+                                icon: Icon(Icons.refresh_rounded, color: Colors.white.withOpacity(0.95)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Center(
                             child: Text(
-                              [
-                                if ((_shopName ?? '').trim().isNotEmpty) _shopName!.trim(),
-                                if ((_displayName ?? '').trim().isNotEmpty) _displayName!.trim(),
-                              ].join(' • '),
+                              heroTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Colors.white.withOpacity(0.85), fontWeight: FontWeight.w700),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.2,
+                              ),
                             ),
                           ),
-                      ]),
-                    ),
+                          const SizedBox(height: 4),
+                          Center(
+                            child: Text(
+                              heroSubtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.84),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Center(
+                            child: Container(
+                              width: 140,
+                              height: 1,
+                              color: Colors.white.withOpacity(0.18),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
 
-                    // ✅ icon buttons beside calendar
-                    IconButton(
-                      tooltip: 'ผู้ผลิต',
-                      onPressed: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ManufacturersPage()),
-                        );
-                        if (mounted) _bootstrap();
-                      },
-                      icon: const Icon(Icons.domain_rounded, color: Colors.white),
-                    ),
-                    IconButton(
-                      tooltip: 'Supplier',
-                      onPressed: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const SuppliersPage()),
-                        );
-                        if (mounted) _bootstrap();
-                      },
-                      icon: const Icon(Icons.store_rounded, color: Colors.white),
-                    ),
-                    IconButton(
-                      tooltip: 'ปฏิทินหมดอายุ',
-                      onPressed: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ExpiryCalendarPage()),
-                        );
-                        if (mounted) _bootstrap();
-                      },
-                      icon: const Icon(Icons.calendar_month_rounded, color: Colors.white),
-                    ),
-                    IconButton(
-                      tooltip: 'รีเฟรช',
-                      onPressed: _bootstrap,
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                          // ✅ เพิ่ม "ผู้ป่วย" เชื่อมกับ patient_home_page.dart
+                          Center(
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 11,
+                              runSpacing: 10,
+                              children: [
+                                // ✅ ข้อมูลยา
+                                actionPill(
+                                  icon: Icons.medication_rounded,
+                                  label: 'ข้อมูลยา',
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(builder: (_) => const AllDrugsPage()),
+                                    );
+                                    if (mounted) _bootstrap();
+                                  },
+                                ),
+
+                                // ✅ NEW: ผู้ป่วย (ไปหน้า PatientHomePage)
+                                actionPill(
+                                  icon: Icons.people_rounded,
+                                  label: 'ผู้ป่วย',
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(builder: (_) => const PatientsPage()),
+                                    );
+                                    if (mounted) _bootstrap();
+                                  },
+                                ),
+
+                                actionPill(
+                                  icon: Icons.domain_rounded,
+                                  label: 'ผู้ผลิต',
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(builder: (_) => const ManufacturersPage()),
+                                    );
+                                    if (mounted) _bootstrap();
+                                  },
+                                ),
+                                actionPill(
+                                  icon: Icons.store_rounded,
+                                  label: 'Supplier',
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(builder: (_) => const SuppliersPage()),
+                                    );
+                                    if (mounted) _bootstrap();
+                                  },
+                                ),
+                                actionPill(
+                                  icon: Icons.calendar_month_rounded,
+                                  label: 'ปฏิทินหมดอายุ',
+                                  onTap: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(builder: (_) => const ExpiryCalendarPage()),
+                                    );
+                                    if (mounted) _bootstrap();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-              ]),
+              ),
             ),
 
             const SizedBox(height: 14),
 
-            // ✅ แจ้งเตือน: วันหมดอายุ (ไม่มีฟุ้ง)
             if (_expiredCount > 0 || _nearExpireCount > 0)
               _panelNoFuzz(
                 title: 'แจ้งเตือน: วันหมดอายุ',
@@ -1518,7 +1633,6 @@ class _HomePageState extends State<HomePage> {
 
             if (_expiredCount > 0 || _nearExpireCount > 0) const SizedBox(height: 12),
 
-            // ✅ แจ้งเตือน: สต็อกสินค้า (ไม่มีฟุ้ง)
             if (_lowStockCount > 0 || _outStockCount > 0)
               _panelNoFuzz(
                 title: 'แจ้งเตือน: สต็อกสินค้า',
@@ -1545,7 +1659,6 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // ================= KPI GRID (ไม่มีฟุ้ง) =================
             LayoutBuilder(
               builder: (context, c) {
                 final wide = c.maxWidth >= 760;
@@ -1577,16 +1690,6 @@ class _HomePageState extends State<HomePage> {
                     SizedBox(
                       width: w,
                       child: _statCardNoFuzz(
-                        title: 'คงเหลือรวม',
-                        value: _onHandBaseTotal.toStringAsFixed(0),
-                        sub: 'รวมหน่วยฐานทุกล็อต',
-                        icon: Icons.widgets_rounded,
-                        tone: Colors.teal,
-                      ),
-                    ),
-                    SizedBox(
-                      width: w,
-                      child: _statCardNoFuzz(
                         title: 'กำไรโดยประมาณ',
                         value: '${_money(_profitEst)} ฿',
                         sub: 'ช่วง $_days วันล่าสุด',
@@ -1601,7 +1704,6 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // ✅ ภาพรวมล็อต (ไม่มีฟุ้ง)
             _panelNoFuzz(
               title: 'ภาพรวมล็อต (ปกติ/ใกล้หมด/หมดอายุ)',
               icon: Icons.pie_chart_rounded,
@@ -1627,7 +1729,8 @@ class _HomePageState extends State<HomePage> {
                     runSpacing: 8,
                     children: [
                       _legendDot('ปกติ', Colors.green, '${_pct(okLots, totalLotForStatus)}%'),
-                      _legendDot('ใกล้หมด', Colors.orange, '${_pct(_nearExpireCount, totalLotForStatus)}%'),
+                      _legendDot('ใกล้หมด', Colors.orange,
+                          '${_pct(_nearExpireCount, totalLotForStatus)}%'),
                       _legendDot('หมดอายุ', Colors.red, '${_pct(_expiredCount, totalLotForStatus)}%'),
                     ],
                   ),
@@ -1637,7 +1740,6 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // ✅ กราฟ (ไม่มีฟุ้ง)
             _panelNoFuzz(
               title: '📊 กราฟเส้นยอดขาย',
               icon: Icons.show_chart_rounded,
@@ -1674,7 +1776,6 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // ✅ Top 10 (ไม่มีฟุ้ง)
             _panelNoFuzz(
               title: '🏆 Top 10 สินค้าขายดี',
               icon: Icons.stars_rounded,
@@ -1731,8 +1832,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   // =========================
-  // ✅ PANEL แบบ "ไม่ฟุ้ง" (สำคัญ)
-  // =========================
   Widget _panelNoFuzz({
     required String title,
     required IconData icon,
@@ -1745,10 +1844,9 @@ class _HomePageState extends State<HomePage> {
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white, // ✅ พื้นขาวล้วน
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.black.withOpacity(0.06)),
-          // ✅ เงาแบบคม ไม่ฟุ้ง (blur ต่ำ)
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
@@ -1784,7 +1882,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ✅ ทำให้แถวแจ้งเตือน "กดได้" (ไม่มีฟุ้ง)
   Widget _alertRow(IconData icon, String text, Color c, {VoidCallback? onTap}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1826,7 +1923,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ✅ สถิติ: ทำเป็นกล่องขาว + เงาคม (ไม่ฟุ้ง)
   Widget _statCardNoFuzz({
     required String title,
     required String value,
@@ -1904,7 +2000,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ✅ top row: กล่องขาว + เงาคม ไม่ฟุ้ง
   Widget _topRowNoFuzz({required int rank, required _TopDrug t}) {
     final cs = Theme.of(context).colorScheme;
     final badge = rank == 1
@@ -1972,7 +2067,7 @@ class _LineChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _LineChartPainter(points: points, color: Theme.of(context).colorScheme.primary),
+      painter: _LineChartPainter(points: points, color: PharmaColors.green),
       child: const SizedBox.expand(),
     );
   }

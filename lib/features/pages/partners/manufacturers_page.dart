@@ -388,7 +388,7 @@ class _ManufacturersPageState extends State<ManufacturersPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
      appBar: AppBar(
-  backgroundColor: const Color.fromARGB(255, 14, 159, 111), // ✅ สีเขียว
+  backgroundColor: const Color.fromARGB(255, 25, 118, 210), // ✅ สีเขียว
   foregroundColor: Colors.white,           // ✅ ไอคอน + ตัวหนังสือสีขาว
   elevation: 0,
   centerTitle: true,

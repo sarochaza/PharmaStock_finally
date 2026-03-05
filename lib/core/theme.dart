@@ -2,14 +2,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+
 class PharmaColors {
-  static const primary = Color(0xFF0E9F6E);
+  static const darkBlue   = Color(0xFF0D47A1);  // Deep Blue
+  static const primary    = Color(0xFF1976D2);  // Main Blue
+  static const lightBlue  = Color(0xFFBBDEFB);  // Soft Background
+  static const purple     = Color(0xFF7B61FF);  // Accent
+  static const bg         = Color(0xFFF5F8FF);
+  static const green = Color(0xFF0E9F6E);
   static const teal = Color(0xFF1CB5A3);
   static const navy = Color(0xFF0F2A43);
-  static const bg = Color(0xFFF4F9F7);
+  static const bg2 = Color(0xFFF4F9F7);
+
 
   static const danger = Color(0xFFEF4444);
 }
+
 
 ThemeData buildPhamoryTheme() {
   // ✅ ใช้ fromSeed เพื่อให้ได้ ColorScheme ครบทุก field (กัน error ข้ามเวอร์ชัน)
@@ -19,6 +27,7 @@ ThemeData buildPhamoryTheme() {
     background: PharmaColors.bg,
   );
 
+
   // ✅ ปรับโทนให้ตรงแบรนด์ของคุณ
   final colorScheme = baseScheme.copyWith(
     primary: PharmaColors.primary,
@@ -27,6 +36,7 @@ ThemeData buildPhamoryTheme() {
     error: PharmaColors.danger,
     background: PharmaColors.bg,
   );
+
 
   // ✅ ฟอนต์หลักทั้งแอป (ยังคง Kanit) แต่หัวข้อ AppBar จะใช้ Sarabun ใน appBarTheme
   final baseText = GoogleFonts.kanitTextTheme();
@@ -58,13 +68,16 @@ ThemeData buildPhamoryTheme() {
     ),
   );
 
+
   const radius = 22.0;
+
 
   return ThemeData(
     useMaterial3: true,
     colorScheme: colorScheme,
     scaffoldBackgroundColor: PharmaColors.bg,
     textTheme: textTheme,
+
 
     // ===== AppBar =====
     // ✅ สีเดียว + ฟอนต์เรียบร้อยสำหรับคำว่า PharmaStock
@@ -84,6 +97,7 @@ ThemeData buildPhamoryTheme() {
       iconTheme: const IconThemeData(color: Colors.white),
     ),
 
+
     // ===== Cards =====
     cardTheme: CardThemeData(
       elevation: 0,
@@ -95,6 +109,7 @@ ThemeData buildPhamoryTheme() {
       margin: const EdgeInsets.symmetric(vertical: 8),
     ),
 
+
     // ===== Dialog =====
     dialogTheme: DialogThemeData(
       backgroundColor: colorScheme.surface,
@@ -105,6 +120,7 @@ ThemeData buildPhamoryTheme() {
       titleTextStyle: textTheme.titleLarge,
       contentTextStyle: textTheme.bodyMedium,
     ),
+
 
     // ===== Inputs =====
     inputDecorationTheme: InputDecorationTheme(
@@ -138,6 +154,7 @@ ThemeData buildPhamoryTheme() {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     ),
 
+
     // ===== Buttons =====
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -160,6 +177,7 @@ ThemeData buildPhamoryTheme() {
       ),
     ),
 
+
     // ===== FAB =====
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: PharmaColors.primary,
@@ -170,6 +188,7 @@ ThemeData buildPhamoryTheme() {
       ),
     ),
 
+
     // ===== SnackBar =====
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
@@ -179,6 +198,7 @@ ThemeData buildPhamoryTheme() {
         borderRadius: BorderRadius.circular(16),
       ),
     ),
+
 
     // ===== NavigationBar =====
     navigationBarTheme: NavigationBarThemeData(
@@ -192,10 +212,11 @@ ThemeData buildPhamoryTheme() {
         final selected = states.contains(WidgetState.selected);
         return IconThemeData(
           size: 24,
-          color: selected ? PharmaColors.primary : const Color(0xFF6B7280),
+          color: selected ? const Color.fromARGB(255, 23, 127, 139) : const Color(0xFF6B7280),
         );
       }),
       indicatorColor: PharmaColors.primary.withOpacity(0.14),
     ),
   );
 }
+

@@ -36,3 +36,6 @@ flutter:
   assets:
     - assets/logo.png
     - .env
+    - assets/pill.png
+
+

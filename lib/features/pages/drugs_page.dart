@@ -42,8 +42,24 @@ class _DrugsPageState extends State<DrugsPage> {
     super.dispose();
   }
 
+  // ✅ helper: ถือว่า active ถ้า is_active == true หรือ status == 'active'
+  bool _isDrugActive(Map<String, dynamic> d) {
+    final isActive = d['is_active'];
+    if (isActive is bool) return isActive;
+
+    final status = (d['status'] ?? '').toString().toLowerCase().trim();
+    if (status.isNotEmpty) return status == 'active';
+
+    // ถ้าไม่มีทั้งสอง field ให้ถือว่า active (กันข้อมูลเก่า)
+    return true;
+  }
+
   Future<_Bundle> _load() async {
-    final drugs = await repo.listDrugs();
+    final drugsRaw = await repo.listDrugs();
+
+    // ✅ สำคัญ: แสดงเฉพาะยาใช้งานอยู่ (active) บนหน้า Drugs
+    final drugs = drugsRaw.where(_isDrugActive).toList();
+
     final lots = await repo.listDrugLotsAllFromView();
     return _Bundle(drugs: drugs, lots: lots);
   }
@@ -116,12 +132,17 @@ class _DrugsPageState extends State<DrugsPage> {
     }
   }
 
+  // ✅ ลบยา + แจ้งผู้ใช้แบบเข้าใจง่าย (สต็อกคงเหลือ / เคยมีประวัติ)
   Future<void> _deleteDrug(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('ลบรายการยา'),
-        content: const Text('ต้องการลบรายการนี้ใช่ไหม?'),
+        content: const Text(
+          'ต้องการลบรายการนี้ใช่ไหม?\n\n'
+          'หมายเหตุ: ระบบจะลบได้เฉพาะยา “ที่ไม่มีสต็อกคงเหลือ” และ “ไม่เคยมีประวัติรับเข้า/ขาย” '
+          'เพื่อป้องกันข้อมูลผิดพลาด',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -143,7 +164,7 @@ class _DrugsPageState extends State<DrugsPage> {
 
       setState(() {
         _highlightDrugId = null;
-        _future = _load();
+        _future = _load(); // ✅ reload แล้วจะยังคงแสดงเฉพาะ active
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -151,9 +172,96 @@ class _DrugsPageState extends State<DrugsPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('ลบไม่สำเร็จ: $e')),
+
+      final raw = e.toString();
+
+      String title = 'ลบไม่สำเร็จ';
+      String body = 'ระบบไม่สามารถลบรายการนี้ได้\n\nรายละเอียด: $raw';
+      bool showInactivate = true;
+
+      // ✅ กรณี 1: ยังมีสต็อกคงเหลือ
+      if (raw.contains('DRUG_HAS_STOCK:')) {
+        title = 'ลบไม่ได้ (ยังมีสต็อกคงเหลือ)';
+        final after = raw.split('DRUG_HAS_STOCK:').last.trim();
+
+        // ดึงเลขคร่าว ๆ (กัน format ต่าง ๆ)
+        final qtyMatch = RegExp(r'(-?\d+(\.\d+)?)').firstMatch(after);
+        final qtyStr = qtyMatch?.group(1) ?? '-';
+
+        body =
+            'ยานี้ยังมีสต็อกคงเหลืออยู่ในคลัง\n'
+            'จึงไม่สามารถลบได้ เพื่อป้องกันข้อมูลสต็อกผิดพลาด\n\n'
+            'คงเหลือโดยประมาณ: $qtyStr (หน่วยฐาน)\n\n'
+            'ทางเลือกที่แนะนำ:\n'
+            '• ถ้าต้องการหยุดใช้ยา: กด “ปิดการใช้งาน (Inactive)”\n'
+            '• หรือทำรายการให้สต็อกเป็น 0 ก่อนแล้วค่อยลบ';
+      }
+
+      // ✅ กรณี 2: สต็อกเป็น 0 แต่เคยมีประวัติรับเข้า/ขาย
+      else if (raw.contains('DRUG_HAS_TXN:')) {
+        title = 'ลบไม่ได้ (เคยมีประวัติทำรายการ)';
+
+        final inMatch = RegExp(r'in=(\d+)').firstMatch(raw);
+        final outMatch = RegExp(r'out=(\d+)').firstMatch(raw);
+        final inCnt = inMatch?.group(1) ?? '-';
+        final outCnt = outMatch?.group(1) ?? '-';
+
+        body =
+            'ยานี้เคยมีการ “รับเข้า” หรือ “ขาย/จ่ายออก” มาก่อน\n'
+            'ระบบจึงไม่อนุญาตให้ลบ เพื่อให้ประวัติใบรับเข้า/ใบขายยังถูกต้อง\n\n'
+            'สรุปประวัติ:\n'
+            '• รับเข้า: $inCnt รายการ\n'
+            '• จ่ายออก/ขาย: $outCnt รายการ\n\n'
+            'ทางเลือกที่แนะนำ:\n'
+            '• ปิดการใช้งาน (Inactive) เพื่อซ่อน/หยุดใช้ยา\n'
+            '  (ประวัติยังอยู่ครบ)';
+      }
+
+      // ✅ กรณี 3: ไม่พบยา/สิทธิ์
+      else if (raw.contains('DRUG_NOT_FOUND')) {
+        title = 'ลบไม่สำเร็จ';
+        body = 'ไม่พบรายการยานี้ หรือคุณไม่มีสิทธิ์ลบรายการดังกล่าว';
+        showInactivate = false;
+      }
+
+      final choose = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('ปิด'),
+            ),
+            if (showInactivate)
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('ปิดการใช้งานแทน'),
+              ),
+          ],
+        ),
       );
+
+      if (choose == true) {
+        try {
+          await repo.setDrugActive(id, false);
+
+          // ✅ reload แล้วรายการจะหายไปจากหน้า Drugs ทันที (เพราะเราโชว์เฉพาะ active)
+          setState(() {
+            _highlightDrugId = null;
+            _future = _load();
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ปิดการใช้งานเรียบร้อย')),
+          );
+        } catch (e2) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ปิดการใช้งานไม่สำเร็จ: $e2')),
+          );
+        }
+      }
     }
   }
 
@@ -196,7 +304,6 @@ class _DrugsPageState extends State<DrugsPage> {
 
   // ✅ อ่านจำนวนคงเหลือจากหลายชื่อคอลัมน์ (กัน view ไม่ตรงชื่อ)
   double _readLotQtyBase(Map<String, dynamic> lotRow) {
-    // ตัวที่พบบ่อย (ตาม schema และที่คุณเคยใช้)
     final candidates = [
       'qty_on_hand_base',
       'lot_on_hand_base',
@@ -212,7 +319,6 @@ class _DrugsPageState extends State<DrugsPage> {
     return 0;
   }
 
-  // ✅ สถานะสต็อกตาม reorder_point
   _StockStatus _calcStatus({required double totalBase, required double reorderPoint}) {
     if (totalBase <= 0) return _StockStatus.out;
     if (reorderPoint > 0 && totalBase <= reorderPoint) return _StockStatus.low;
@@ -275,7 +381,6 @@ class _DrugsPageState extends State<DrugsPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F6FB),
-     
       body: SafeArea(
         child: FutureBuilder<_Bundle>(
           future: _future,
@@ -288,7 +393,7 @@ class _DrugsPageState extends State<DrugsPage> {
             }
 
             final data = snap.data ?? const _Bundle(drugs: [], lots: []);
-            final allDrugs = data.drugs;
+            final allDrugs = data.drugs; // ✅ ตอนนี้คือ "active เท่านั้น"
             final drugs = _filter(allDrugs);
 
             final byDrug = <String, List<Map<String, dynamic>>>{};
@@ -305,7 +410,6 @@ class _DrugsPageState extends State<DrugsPage> {
                   controller: _scrollCtl,
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                   children: [
-                    // Search bar (สไตล์รูปที่ 2)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
@@ -343,7 +447,6 @@ class _DrugsPageState extends State<DrugsPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     if (allDrugs.isEmpty)
                       Center(
                         child: Card(
@@ -384,7 +487,7 @@ class _DrugsPageState extends State<DrugsPage> {
                         final unit = (d['base_unit'] ?? '').toString();
 
                         final packUnit = (d['pack_unit'] ?? '').toString().trim();
-                        final packToBase = _toDouble(d['pack_to_base']); // อาจเป็น int ใน DB ก็ได้
+                        final packToBase = _toDouble(d['pack_to_base']);
                         final reorderPoint = _toDouble(d['reorder_point'] ?? d['reorder_level']);
 
                         final subtitle = [
@@ -404,7 +507,6 @@ class _DrugsPageState extends State<DrugsPage> {
 
                         final status = _calcStatus(totalBase: total, reorderPoint: reorderPoint);
 
-                        // ✅ แสดงหน่วยบรรจุ (ถ้ามี)
                         String packText = '';
                         if (packUnit.isNotEmpty && packToBase > 0) {
                           final packQty = total / packToBase;
@@ -447,7 +549,6 @@ class _DrugsPageState extends State<DrugsPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // header
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -477,17 +578,10 @@ class _DrugsPageState extends State<DrugsPage> {
                                       ),
                                     ),
                                     const SizedBox(width: 12),
-                                    _StatusPill(
-                                      text: badge.text,
-                                      icon: badge.icon,
-                                      tone: badge.tone,
-                                    ),
+                                    _StatusPill(text: badge.text, icon: badge.icon, tone: badge.tone),
                                   ],
                                 ),
-
                                 const SizedBox(height: 14),
-
-                                // action buttons (แนวรูปที่ 2)
                                 Wrap(
                                   spacing: 10,
                                   runSpacing: 10,
@@ -554,25 +648,15 @@ class _StatusBadge {
   static _StatusBadge from(_StockStatus s, {required double reorderPoint, required String unit}) {
     switch (s) {
       case _StockStatus.out:
-        return _StatusBadge(
-          text: 'หมดสต็อก',
-          icon: Icons.error_outline_rounded,
-          tone: _Tone.red,
-        );
+        return _StatusBadge(text: 'หมดสต็อก', icon: Icons.error_outline_rounded, tone: _Tone.red);
       case _StockStatus.low:
-        final th = reorderPoint > 0 ? ' (ต่ำกว่า ${reorderPoint % 1 == 0 ? reorderPoint.toStringAsFixed(0) : reorderPoint.toStringAsFixed(2)} ${unit.isEmpty ? '' : unit})' : '';
-        return _StatusBadge(
-          text: 'ใกล้หมด$th',
-          icon: Icons.warning_amber_rounded,
-          tone: _Tone.orange,
-        );
+        final th = reorderPoint > 0
+            ? ' (ต่ำกว่า ${reorderPoint % 1 == 0 ? reorderPoint.toStringAsFixed(0) : reorderPoint.toStringAsFixed(2)} ${unit.isEmpty ? '' : unit})'
+            : '';
+        return _StatusBadge(text: 'ใกล้หมด$th', icon: Icons.warning_amber_rounded, tone: _Tone.orange);
       case _StockStatus.ok:
       default:
-        return _StatusBadge(
-          text: 'ปกติ',
-          icon: Icons.check_circle_outline_rounded,
-          tone: _Tone.green,
-        );
+        return _StatusBadge(text: 'ปกติ', icon: Icons.check_circle_outline_rounded, tone: _Tone.green);
     }
   }
 }

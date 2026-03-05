@@ -77,27 +77,37 @@ class DrugsRepository {
     final drugId = (drugRow['id'] ?? '').toString();
 
     final unitsPayload = normalizedUnits.map((u) {
-  return {
-    'owner_id': uid,
-    'drug_id': drugId,
-    'unit_name': u.unitName.trim(),
-    'to_base': u.toBase,
-    'is_default': u.isDefault,
-    'is_active': u.isActive, // ✅ เพิ่มบรรทัดนี้
-  };
-}).toList();
+      return {
+        'owner_id': uid,
+        'drug_id': drugId,
+        'unit_name': u.unitName.trim(),
+        'to_base': u.toBase,
+        'is_default': u.isDefault,
+        'is_active': u.isActive,
+      };
+    }).toList();
 
-await client.from('drug_dispense_units').insert(unitsPayload);
+    await client.from('drug_dispense_units').insert(unitsPayload);
 
     return drugId;
   }
 
-  List<DispenseUnitInput> _normalizeUnits(List<DispenseUnitInput> units, String baseUnit) {
+  List<DispenseUnitInput> _normalizeUnits(
+    List<DispenseUnitInput> units,
+    String baseUnit,
+  ) {
     var u = units;
 
     // ต้องมีอย่างน้อย 1 หน่วย
     if (u.isEmpty) {
-      u = [DispenseUnitInput(unitName: baseUnit, toBase: 1, isDefault: true, isActive: true)];
+      u = [
+        DispenseUnitInput(
+          unitName: baseUnit,
+          toBase: 1,
+          isDefault: true,
+          isActive: true,
+        )
+      ];
     }
 
     // ต้องมี default 1 ตัว
@@ -146,7 +156,14 @@ await client.from('drug_dispense_units').insert(unitsPayload);
 
     // ถ้าหลังกรองเหลือว่าง → คืน base unit
     if (out.isEmpty) {
-      return [DispenseUnitInput(unitName: baseUnit, toBase: 1, isDefault: true, isActive: true)];
+      return [
+        DispenseUnitInput(
+          unitName: baseUnit,
+          toBase: 1,
+          isDefault: true,
+          isActive: true,
+        )
+      ];
     }
 
     return out;
@@ -209,9 +226,29 @@ await client.from('drug_dispense_units').insert(unitsPayload);
     return List<Map<String, dynamic>>.from(res);
   }
 
+  // ===============================
+  // ลบยา (ปลอดภัย) ✅ ใช้ RPC: เช็คสต็อก + ประวัติ
+  // ===============================
   Future<void> deleteDrug(String id) async {
+    _requireUid; // ensure signed in
+    await client.rpc('delete_drug_safe', params: {'p_drug_id': id});
+  }
+
+  // ===============================
+  // ปิด/เปิดการใช้งานยา (แนะนำเมื่อ "ลบไม่ได้")
+  // ===============================
+  Future<void> setDrugActive(String drugId, bool active) async {
     final uid = _requireUid;
-    await client.from('drugs').delete().eq('owner_id', uid).eq('id', id);
+
+    await client
+        .from('drugs')
+        .update({
+          'is_active': active,
+          'status': active ? 'active' : 'inactive',
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('owner_id', uid)
+        .eq('id', drugId);
   }
 
   // ===============================
@@ -470,7 +507,7 @@ await client.from('drug_dispense_units').insert(unitsPayload);
         'unit_name': u.unitName.trim(),
         'to_base': u.toBase,
         'is_default': u.isDefault,
-        'is_active': u.isActive, // ✅ FIX
+        'is_active': u.isActive,
       };
     }).toList();
 

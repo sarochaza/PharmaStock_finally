@@ -529,7 +529,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
       appBar: AppBar(
-  backgroundColor: const Color.fromARGB(255, 14, 159, 111), // เขียวเข้มสวย
+  backgroundColor: const Color.fromARGB(255, 25, 118, 210), // เขียวเข้มสวย
   foregroundColor: Colors.white,           // ไอคอน + ตัวหนังสือสีขาว
   elevation: 0,
   centerTitle: true,

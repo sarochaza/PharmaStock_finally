@@ -246,7 +246,7 @@ Future<void> _loadOrders() async {
       appBar: AppBar(
         title: const Text('ประวัติการจ่ายยา / การสั่งซื้อ'),
         centerTitle: true,
-        backgroundColor: const Color(0xFF0EA37A),
+        backgroundColor: const Color(0xFF1976D2),
         foregroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
